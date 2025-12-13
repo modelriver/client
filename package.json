@@ -1,0 +1,121 @@
+{
+  "name": "@modelriver/client",
+  "version": "1.0.0",
+  "description": "Official ModelRiver client SDK for real-time AI response streaming via WebSockets",
+  "author": "ModelRiver",
+  "license": "MIT",
+  "main": "dist/index.cjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react.mjs",
+      "require": "./dist/react.cjs",
+      "types": "./dist/react.d.ts"
+    },
+    "./vue": {
+      "import": "./dist/vue.mjs",
+      "require": "./dist/vue.cjs",
+      "types": "./dist/vue.d.ts"
+    },
+    "./angular": {
+      "import": "./dist/angular.mjs",
+      "require": "./dist/angular.cjs",
+      "types": "./dist/angular.d.ts"
+    },
+    "./svelte": {
+      "import": "./dist/svelte.mjs",
+      "require": "./dist/svelte.cjs",
+      "types": "./dist/svelte.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "cdn"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rollup -c",
+    "build:cdn": "node scripts/build-cdn.js",
+    "dev": "rollup -c -w",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist cdn",
+    "prepublishOnly": "npm run clean && npm run build && npm run build:cdn"
+  },
+  "dependencies": {
+    "phoenix": "^1.7.14"
+  },
+  "devDependencies": {
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.12",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "jsdom": "^25.0.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rollup": "^4.28.1",
+    "rollup-plugin-dts": "^6.1.1",
+    "rxjs": "^7.8.1",
+    "svelte": "^5.14.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "vue": "^3.5.13"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "vue": ">=3.0.0",
+    "@angular/core": ">=14.0.0",
+    "rxjs": ">=7.0.0",
+    "svelte": ">=3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    },
+    "@angular/core": {
+      "optional": true
+    },
+    "rxjs": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    }
+  },
+  "keywords": [
+    "modelriver",
+    "ai",
+    "websocket",
+    "streaming",
+    "llm",
+    "phoenix",
+    "react",
+    "vue",
+    "angular",
+    "svelte"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/modelriver/client.git"
+  },
+  "bugs": {
+    "url": "https://github.com/modelriver/client/issues"
+  },
+  "homepage": "https://modelriver.com/docs/client-sdk"
+}
