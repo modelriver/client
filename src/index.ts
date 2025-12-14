@@ -26,6 +26,7 @@ export { ModelRiverClient } from './client';
 export type {
   ModelRiverClientOptions,
   ConnectOptions,
+  AsyncResponse,
   TokenPayload,
   WorkflowStep,
   WorkflowStepStatus,

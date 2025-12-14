@@ -57,6 +57,29 @@ export interface ConnectOptions {
 }
 
 /**
+ * Response from /api/ai/async endpoint
+ */
+export interface AsyncResponse {
+  /** Response message (always "success" for successful requests) */
+  message: string;
+  /** Request status ("pending" for async requests) */
+  status: 'pending';
+  /** Unique channel ID for this request */
+  channel_id: string;
+  /** WebSocket URL to connect to */
+  websocket_url: string;
+  /** Full channel name to join (e.g., "ai_response:uuid") */
+  websocket_channel: string;
+  /** Optional instructions for connecting */
+  instructions?: {
+    websocket?: string;
+    webhook?: string;
+  };
+  /** Test mode indicator (only present in test mode) */
+  test_mode?: boolean;
+}
+
+/**
  * Decoded token payload
  */
 export interface TokenPayload {
@@ -122,11 +145,15 @@ export interface ResponseError {
  * AI response payload from WebSocket
  */
 export interface AIResponse {
-  /** Response status */
+  /** Response status ("success" or "error") */
   status: string;
   /** Channel ID */
   channel_id?: string;
-  /** Response data */
+  /** AI response content (text) */
+  content?: string;
+  /** Model used for the response */
+  model?: string;
+  /** Response data (structured output) */
   data?: unknown;
   /** Response metadata */
   meta?: ResponseMeta;
