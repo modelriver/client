@@ -312,7 +312,7 @@ interface ModelRiverClientOptions {
 | `connected` | - | Successfully connected |
 | `disconnected` | `reason?: string` | Disconnected from WebSocket |
 | `response` | `AIResponse` | AI response received |
-| `error` | `Error \| string` | Error occurred |
+| `error` | `Error` or `string` | Error occurred |
 | `step` | `WorkflowStep` | Workflow step updated |
 | `channel_joined` | - | Successfully joined channel |
 | `channel_error` | `reason: string` | Channel join failed |
@@ -403,7 +403,9 @@ MIT
 
 ## Links
 
-- [Documentation](https://modelriver.com/docs)
+- [Client SDK Documentation](https://modelriver.com/docs/client-sdk)
 - [API Reference](https://modelriver.com/docs/api)
+- [Getting Started](https://modelriver.com/docs/getting-started)
 - [Dashboard](https://modelriver.com/dashboard)
 - [GitHub Issues](https://github.com/modelriver/client/issues)
+

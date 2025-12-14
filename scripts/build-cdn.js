@@ -90,3 +90,4 @@ console.log('\nCDN build complete!');
 console.log(`\nUsage:`);
 console.log(`  <script src="https://cdn.modelriver.com/client/v${version}/modelriver.min.js"></script>`);
 console.log(`  <script src="https://cdn.modelriver.com/client/latest/modelriver.min.js"></script>`);
+
