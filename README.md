@@ -445,7 +445,8 @@ interface WorkflowStep {
 3. **Your backend** returns these fields to the frontend (never the API key)
 4. **Your frontend** uses this SDK to connect via WebSocket using `channel_id` + `ws_token`
 5. **AI responses** are delivered in real-time to your frontend
-6. **The SDK** handles reconnection, heartbeats, and error recovery
+6. **The SDK** handles heartbeats, channel joins, and automatic reconnection for transient network issues.  
+7. For **page refresh recovery**, use the persistence + reconnect helpers (`persist`, `hasPendingRequest`, `reconnect`, `reconnectWithBackend`) together with your backend `/api/v1/ai/reconnect` endpoint.
 
 ```
 ┌──────────────┐       ┌──────────────┐       ┌──────────────┐
