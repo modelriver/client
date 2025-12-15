@@ -15,6 +15,19 @@ export interface ModelRiverClientOptions {
   baseUrl?: string;
 
   /**
+   * Optional HTTP API base URL for reconnection.
+   *
+   * When provided, the client can call your backend's
+   * `/api/v1/ai/reconnect` endpoint to obtain a fresh
+   * `ws_token` for an existing async request after a
+   * page refresh, instead of reusing a stale token
+   * from localStorage.
+   *
+   * Example: 'https://your-app.com'
+   */
+  apiBaseUrl?: string;
+
+  /**
    * Enable debug logging
    * @default false
    */
@@ -54,6 +67,10 @@ export interface ConnectOptions {
    */
   channelId: string;
   /**
+   * One-time WebSocket token for authentication (from /api/ai/async response)
+   */
+  wsToken: string;
+  /**
    * WebSocket URL (optional, defaults to baseUrl)
    */
   websocketUrl?: string;
@@ -73,6 +90,8 @@ export interface AsyncResponse {
   status: 'pending';
   /** Unique channel ID for this request */
   channel_id: string;
+  /** One-time WebSocket token for authentication */
+  ws_token: string;
   /** WebSocket URL to connect to */
   websocket_url: string;
   /** Full channel name to join (e.g., "ai_response:uuid") */
@@ -179,6 +198,8 @@ export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'err
 export interface ActiveRequest {
   /** Channel ID */
   channelId: string;
+  /** One-time WebSocket token */
+  wsToken: string;
   /** Timestamp when request was created */
   timestamp: number;
   /** WebSocket URL */

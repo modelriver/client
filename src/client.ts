@@ -44,7 +44,7 @@ import {
  *   console.log('AI Response:', data);
  * });
  * 
- * client.connect({ channelId: 'channel-id-from-api' });
+ * client.connect({ channelId: 'channel-id', wsToken: 'ws-token-from-api' });
  * ```
  */
 export class ModelRiverClient {
@@ -56,7 +56,6 @@ export class ModelRiverClient {
   private steps: WorkflowStep[] = [];
   private response: AIResponse | null = null;
   private error: string | null = null;
-  private currentChannelId: string | null = null;
   private currentWebsocketChannel: string | null = null;
   private isConnecting = false;
   private logger: ReturnType<typeof createLogger>;
@@ -72,6 +71,8 @@ export class ModelRiverClient {
       storageKeyPrefix: options.storageKeyPrefix ?? DEFAULT_STORAGE_KEY_PREFIX,
       heartbeatInterval: options.heartbeatInterval ?? DEFAULT_HEARTBEAT_INTERVAL,
       requestTimeout: options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT,
+      // Optional HTTP base URL for reconnect endpoint
+      apiBaseUrl: options.apiBaseUrl ?? '',
     };
 
     this.logger = createLogger(this.options.debug);
@@ -111,7 +112,7 @@ export class ModelRiverClient {
       return;
     }
 
-    const { channelId, websocketUrl, websocketChannel } = options;
+    const { channelId, wsToken, websocketUrl, websocketChannel } = options;
 
     if (!channelId) {
       const errorMsg = 'channelId is required';
@@ -120,8 +121,14 @@ export class ModelRiverClient {
       return;
     }
 
+    if (!wsToken) {
+      const errorMsg = 'wsToken is required for WebSocket authentication';
+      this.setError(errorMsg);
+      this.emit('error', errorMsg);
+      return;
+    }
+
     this.isConnecting = true;
-    this.currentChannelId = channelId;
     this.currentWebsocketChannel = websocketChannel || `ai_response:${channelId}`;
     this.emit('connecting');
 
@@ -138,6 +145,7 @@ export class ModelRiverClient {
       saveActiveRequest(
         this.options.storageKeyPrefix,
         channelId,
+        wsToken,
         websocketUrl,
         websocketChannel
       );
@@ -151,8 +159,9 @@ export class ModelRiverClient {
     const socketUrl = wsUrl.endsWith('/socket') ? wsUrl : `${wsUrl}/socket`;
     this.logger.log('Connecting to:', socketUrl);
 
+    // Pass token to Phoenix Socket for authentication
     this.socket = new Socket(socketUrl, {
-      params: {},
+      params: { token: wsToken },
     });
 
     this.socket.onOpen(() => {
@@ -165,7 +174,7 @@ export class ModelRiverClient {
       this.joinChannel(this.currentWebsocketChannel!);
     });
 
-    this.socket.onError((error) => {
+    this.socket.onError((error: unknown) => {
       this.logger.error('Socket error:', error);
       this.connectionState = 'error';
       this.isConnecting = false;
@@ -175,7 +184,7 @@ export class ModelRiverClient {
       this.emit('error', errorMsg);
     });
 
-    this.socket.onClose((event) => {
+    this.socket.onClose((event: CloseEvent | unknown) => {
       this.logger.log('Socket closed:', event);
       this.connectionState = 'disconnected';
       this.isConnecting = false;
@@ -312,7 +321,6 @@ export class ModelRiverClient {
     this.steps = [];
     this.response = null;
     this.error = null;
-    this.currentChannelId = null;
     this.currentWebsocketChannel = null;
   }
 
@@ -331,13 +339,111 @@ export class ModelRiverClient {
       return false;
     }
 
+    if (!activeRequest.wsToken) {
+      this.logger.warn('No wsToken found in stored request, cannot reconnect');
+      clearActiveRequest(this.options.storageKeyPrefix);
+      return false;
+    }
+
     this.logger.log('Reconnecting with stored channel ID...');
     this.connect({
       channelId: activeRequest.channelId,
+      wsToken: activeRequest.wsToken,
       websocketUrl: activeRequest.websocketUrl,
       websocketChannel: activeRequest.websocketChannel,
     });
     return true;
+  }
+
+  /**
+   * Try to reconnect using your backend `/api/v1/ai/reconnect` endpoint.
+   *
+   * This helper is intended for use with the official ModelRiver backend
+   * endpoint which issues a fresh one-time `ws_token` for an existing
+   * async request. It should be used instead of `reconnect()` in cases
+   * where WebSocket tokens are strictly single-use (the default).
+   *
+   * Requirements:
+   * - `persist` enabled (so the client can read the stored channel ID)
+   * - `apiBaseUrl` configured in `ModelRiverClientOptions`
+   *
+   * Returns `true` if a reconnection attempt was started, `false` if no
+   * pending request was found or configuration was missing.
+   */
+  async reconnectWithBackend(): Promise<boolean> {
+    if (!this.options.persist) {
+      this.logger.warn('Persistence is disabled, cannot reconnect with backend');
+      return false;
+    }
+
+    if (!this.options.apiBaseUrl) {
+      this.logger.warn('apiBaseUrl is not configured, cannot call /api/v1/ai/reconnect');
+      return false;
+    }
+
+    const activeRequest = getActiveRequest(this.options.storageKeyPrefix);
+    if (!activeRequest) {
+      this.logger.log('No active request found for backend reconnection');
+      return false;
+    }
+
+    const base = this.options.apiBaseUrl.replace(/\/+$/, '');
+    const url = `${base}/api/v1/ai/reconnect`;
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          channel_id: activeRequest.channelId,
+        }),
+      });
+
+      if (!response.ok) {
+        this.logger.error('Backend reconnect failed with HTTP status', response.status);
+        return false;
+      }
+
+      const data = (await response.json()) as {
+        channel_id: string;
+        project_id: string;
+        ws_token: string;
+        websocket_url: string;
+        websocket_channel: string;
+      };
+
+      if (!data?.channel_id || !data?.ws_token) {
+        this.logger.error(
+          'Backend reconnect response missing channel_id or ws_token',
+          data
+        );
+        return false;
+      }
+
+      // Save updated request to localStorage for future persistence
+      saveActiveRequest(
+        this.options.storageKeyPrefix,
+        data.channel_id,
+        data.ws_token,
+        data.websocket_url,
+        data.websocket_channel
+      );
+
+      // Initiate WebSocket reconnection with the fresh token
+      this.connect({
+        channelId: data.channel_id,
+        wsToken: data.ws_token,
+        websocketUrl: data.websocket_url,
+        websocketChannel: data.websocket_channel,
+      });
+
+      return true;
+    } catch (error) {
+      this.logger.error('Backend reconnect request failed', error);
+      return false;
+    }
   }
 
   /**
