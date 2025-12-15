@@ -23,8 +23,8 @@
  *   }
  * 
  *   async send() {
- *     const { ws_token } = await this.backendService.createRequest(message);
- *     this.modelRiver.connect({ wsToken: ws_token });
+ *     const { channel_id, websocket_url } = await this.backendService.createRequest(message);
+ *     this.modelRiver.connect({ channelId: channel_id, websocketUrl: websocket_url });
  *   }
  * 
  *   ngOnDestroy() {
@@ -137,7 +137,7 @@ export class ModelRiverService {
   }
 
   /**
-   * Connect to WebSocket with token
+   * Connect to WebSocket with channel ID
    */
   connect(options: ConnectOptions): void {
     if (!this.client) {

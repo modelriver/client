@@ -34,7 +34,7 @@ pnpm add @modelriver/client
 
 ## Quick Start
 
-### 1. Get a token from your backend
+### 1. Get channel ID from your backend
 
 Your backend calls the ModelRiver `/api/ai/async` endpoint and receives connection details:
 
@@ -53,7 +53,7 @@ const response = await fetch('/api/ai/request', {
 //   "websocket_url": "wss://api.modelriver.com/socket",
 //   "websocket_channel": "ai_response:a1b2c3d4-..."
 // }
-const { ws_token, channel_id, websocket_url } = await response.json();
+const { channel_id, websocket_url, websocket_channel } = await response.json();
 ```
 
 ### 2. Connect to ModelRiver
@@ -73,7 +73,7 @@ client.on('error', (error) => {
   console.error('Error:', error);
 });
 
-client.connect({ wsToken: ws_token });
+client.connect({ channelId: channel_id, websocketUrl: websocket_url });
 ```
 
 ## Framework Usage
@@ -97,8 +97,8 @@ function ChatComponent() {
   });
 
   const handleSend = async () => {
-    const { ws_token } = await yourBackendAPI.createRequest(message);
-    connect({ wsToken: ws_token });
+    const { channel_id, websocket_url } = await yourBackendAPI.createRequest(message);
+    connect({ channelId: channel_id, websocketUrl: websocket_url });
   };
 
   return (
@@ -144,8 +144,8 @@ const {
 });
 
 async function handleSend() {
-  const { ws_token } = await yourBackendAPI.createRequest(message);
-  connect({ wsToken: ws_token });
+  const { channel_id, websocket_url } = await yourBackendAPI.createRequest(message);
+  connect({ channelId: channel_id, websocketUrl: websocket_url });
 }
 </script>
 
@@ -198,8 +198,8 @@ export class ChatComponent implements OnDestroy {
   }
 
   async send() {
-    const { ws_token } = await this.backendService.createRequest(message);
-    this.modelRiver.connect({ wsToken: ws_token });
+    const { channel_id, websocket_url } = await this.backendService.createRequest(message);
+    this.modelRiver.connect({ channelId: channel_id, websocketUrl: websocket_url });
   }
 
   ngOnDestroy() {
@@ -222,8 +222,8 @@ export class ChatComponent implements OnDestroy {
   const { response, error, isConnected, steps, connect, disconnect } = modelRiver;
 
   async function send() {
-    const { ws_token } = await backendAPI.createRequest(message);
-    connect({ wsToken: ws_token });
+    const { channel_id, websocket_url } = await backendAPI.createRequest(message);
+    connect({ channelId: channel_id, websocketUrl: websocket_url });
   }
 
   onDestroy(() => disconnect());
@@ -271,11 +271,11 @@ export class ChatComponent implements OnDestroy {
     });
 
     document.getElementById('send').addEventListener('click', async () => {
-      // Get token from your backend
+      // Get channel ID from your backend
       const res = await fetch('/api/ai/request', { method: 'POST' });
-      const { ws_token } = await res.json();
+      const { channel_id, websocket_url } = await res.json();
       
-      client.connect({ wsToken: ws_token });
+      client.connect({ channelId: channel_id, websocketUrl: websocket_url });
     });
   </script>
 </body>
@@ -303,10 +303,10 @@ interface ModelRiverClientOptions {
 
 | Method | Description |
 |--------|-------------|
-| `connect({ wsToken })` | Connect to WebSocket with token |
+| `connect({ channelId, websocketUrl?, websocketChannel? })` | Connect to WebSocket with channel ID |
 | `disconnect()` | Disconnect from WebSocket |
 | `reset()` | Reset state and clear stored data |
-| `reconnect()` | Reconnect using stored token |
+| `reconnect()` | Reconnect using stored channel ID |
 | `getState()` | Get current client state |
 | `hasPendingRequest()` | Check if there's a pending request |
 | `on(event, callback)` | Add event listener (returns unsubscribe function) |
@@ -379,8 +379,8 @@ interface WorkflowStep {
 
 1. **Your backend** calls ModelRiver's `/api/ai/async` endpoint
 2. **ModelRiver** returns `channel_id`, `websocket_url`, and `websocket_channel`
-3. **Your backend** generates a `ws_token` and returns it to the frontend
-4. **Your frontend** uses this SDK to connect via WebSocket
+3. **Your backend** returns these fields to the frontend
+4. **Your frontend** uses this SDK to connect via WebSocket using `channel_id`
 5. **AI responses** are delivered in real-time to your frontend
 6. **The SDK** handles reconnection, heartbeats, and error recovery
 
@@ -394,9 +394,9 @@ interface WorkflowStep {
        │                      │  2. Create request   │
        │                      │─────────────────────>│
        │                      │                      │
-       │                      │  3. Return ws_token  │
+       │                      │  3. Return channel_id│
        │                      │<─────────────────────│
-       │  4. Return token     │                      │
+       │  4. Return channel_id│                      │
        │<─────────────────────│                      │
        │                      │                      │
        │  5. Connect WebSocket (SDK)                 │
@@ -414,13 +414,9 @@ The `/api/ai/async` response contains:
 - `websocket_url` - WebSocket endpoint URL
 - `websocket_channel` - Channel name to join
 
-The `ws_token` (generated by your backend) is a short-lived JWT that:
-- Contains `project_id`, `channel_id`, and `topic`
-- Is decoded client-side (signature verified server-side)
-- Expires after 5 minutes
-- Should never be exposed in client-side code directly
+The client SDK uses `channel_id` directly to connect to the WebSocket. The `channel_id` is unique per request and is used to join the appropriate channel for receiving responses.
 
-**Important**: Always obtain tokens from your backend. Never expose your ModelRiver API key in frontend code.
+**Important**: Always obtain `channel_id` from your backend. Never expose your ModelRiver API key in frontend code.
 
 ## Browser Support
 

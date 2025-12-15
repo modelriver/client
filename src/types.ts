@@ -50,10 +50,17 @@ export interface ModelRiverClientOptions {
  */
 export interface ConnectOptions {
   /**
-   * WebSocket token from your backend
-   * This JWT contains project_id, channel_id, and topic claims
+   * Channel ID from /api/ai/async response
    */
-  wsToken: string;
+  channelId: string;
+  /**
+   * WebSocket URL (optional, defaults to baseUrl)
+   */
+  websocketUrl?: string;
+  /**
+   * Full channel name to join (optional, defaults to ai_response:{channelId})
+   */
+  websocketChannel?: string;
 }
 
 /**
@@ -96,7 +103,7 @@ export interface TokenPayload {
 /**
  * Workflow step status
  */
-export type WorkflowStepStatus = 'pending' | 'loading' | 'success' | 'error';
+export type WorkflowStepStatus = 'pending' | 'success' | 'error';
 
 /**
  * Workflow step for progress tracking
@@ -174,10 +181,10 @@ export interface ActiveRequest {
   channelId: string;
   /** Timestamp when request was created */
   timestamp: number;
-  /** Project ID */
-  projectId: string;
-  /** WebSocket token */
-  wsToken: string;
+  /** WebSocket URL */
+  websocketUrl?: string;
+  /** Full channel name to join */
+  websocketChannel?: string;
 }
 
 /**

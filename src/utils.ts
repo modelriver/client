@@ -4,7 +4,7 @@
  * Helper functions for JWT decoding, localStorage operations, and URL building.
  */
 
-import type { TokenPayload, ActiveRequest, WorkflowStep } from './types';
+import type { ActiveRequest, WorkflowStep } from './types';
 
 /**
  * Default WebSocket base URL
@@ -130,17 +130,17 @@ export function isStorageAvailable(): boolean {
  */
 export function saveActiveRequest(
   prefix: string,
-  projectId: string,
   channelId: string,
-  wsToken: string
+  websocketUrl?: string,
+  websocketChannel?: string
 ): void {
   if (!isStorageAvailable()) return;
 
   const request: ActiveRequest = {
     channelId,
     timestamp: Date.now(),
-    projectId,
-    wsToken,
+    websocketUrl,
+    websocketChannel,
   };
 
   try {

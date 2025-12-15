@@ -8,7 +8,6 @@ import { Socket, Channel } from 'phoenix';
 import type {
   ModelRiverClientOptions,
   ConnectOptions,
-  TokenPayload,
   ModelRiverEventType,
   ModelRiverEventMap,
   ConnectionState,
@@ -21,9 +20,6 @@ import {
   DEFAULT_STORAGE_KEY_PREFIX,
   DEFAULT_HEARTBEAT_INTERVAL,
   DEFAULT_REQUEST_TIMEOUT,
-  decodeToken,
-  isTokenExpired,
-  buildWebSocketUrl,
   saveActiveRequest,
   getActiveRequest,
   clearActiveRequest,
@@ -48,7 +44,7 @@ import {
  *   console.log('AI Response:', data);
  * });
  * 
- * client.connect({ wsToken: 'your-token-from-backend' });
+ * client.connect({ channelId: 'channel-id-from-api' });
  * ```
  */
 export class ModelRiverClient {
@@ -60,8 +56,8 @@ export class ModelRiverClient {
   private steps: WorkflowStep[] = [];
   private response: AIResponse | null = null;
   private error: string | null = null;
-  private currentToken: TokenPayload | null = null;
-  private currentWsToken: string | null = null;
+  private currentChannelId: string | null = null;
+  private currentWebsocketChannel: string | null = null;
   private isConnecting = false;
   private logger: ReturnType<typeof createLogger>;
 
@@ -107,7 +103,7 @@ export class ModelRiverClient {
   }
 
   /**
-   * Connect to WebSocket with token
+   * Connect to WebSocket with channel ID
    */
   connect(options: ConnectOptions): void {
     if (this.isConnecting) {
@@ -115,35 +111,18 @@ export class ModelRiverClient {
       return;
     }
 
-    const { wsToken } = options;
+    const { channelId, websocketUrl, websocketChannel } = options;
 
-    // Decode and validate token
-    let tokenPayload: TokenPayload;
-    try {
-      tokenPayload = decodeToken(wsToken);
-      this.logger.log('Token decoded:', {
-        projectId: tokenPayload.project_id,
-        channelId: tokenPayload.channel_id,
-        topic: tokenPayload.topic,
-      });
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Invalid token';
-      this.setError(errorMsg);
-      this.emit('error', errorMsg);
-      return;
-    }
-
-    // Check token expiration
-    if (isTokenExpired(tokenPayload)) {
-      const errorMsg = 'Token has expired';
+    if (!channelId) {
+      const errorMsg = 'channelId is required';
       this.setError(errorMsg);
       this.emit('error', errorMsg);
       return;
     }
 
     this.isConnecting = true;
-    this.currentToken = tokenPayload;
-    this.currentWsToken = wsToken;
+    this.currentChannelId = channelId;
+    this.currentWebsocketChannel = websocketChannel || `ai_response:${channelId}`;
     this.emit('connecting');
 
     // Clean up any existing connection
@@ -158,21 +137,22 @@ export class ModelRiverClient {
     if (this.options.persist) {
       saveActiveRequest(
         this.options.storageKeyPrefix,
-        tokenPayload.project_id,
-        tokenPayload.channel_id,
-        wsToken
+        channelId,
+        websocketUrl,
+        websocketChannel
       );
     }
 
-    // Update queue step to loading
-    this.updateStepAndEmit('queue', { status: 'loading' });
+    // Update queue step to pending
+    this.updateStepAndEmit('queue', { status: 'pending' });
 
-    // Create Phoenix Socket
-    const wsUrl = buildWebSocketUrl(this.options.baseUrl, wsToken);
-    this.logger.log('Connecting to:', wsUrl.replace(wsToken, '***TOKEN***'));
+    // Determine WebSocket URL
+    const wsUrl = websocketUrl || this.options.baseUrl;
+    const socketUrl = wsUrl.endsWith('/socket') ? wsUrl : `${wsUrl}/socket`;
+    this.logger.log('Connecting to:', socketUrl);
 
-    this.socket = new Socket(this.options.baseUrl, {
-      params: { token: wsToken },
+    this.socket = new Socket(socketUrl, {
+      params: {},
     });
 
     this.socket.onOpen(() => {
@@ -182,7 +162,7 @@ export class ModelRiverClient {
       this.emit('connected');
 
       // Join channel
-      this.joinChannel(tokenPayload.topic);
+      this.joinChannel(this.currentWebsocketChannel!);
     });
 
     this.socket.onError((error) => {
@@ -219,8 +199,8 @@ export class ModelRiverClient {
       .receive('ok', () => {
         this.logger.log('Channel joined successfully');
         this.updateStepAndEmit('queue', { status: 'success', duration: 100 });
-        this.updateStepAndEmit('process', { status: 'loading' });
-        this.updateStepAndEmit('receive', { status: 'loading' });
+        this.updateStepAndEmit('process', { status: 'pending' });
+        this.updateStepAndEmit('receive', { status: 'pending' });
         this.emit('channel_joined');
         this.startHeartbeat();
       })
@@ -332,12 +312,12 @@ export class ModelRiverClient {
     this.steps = [];
     this.response = null;
     this.error = null;
-    this.currentToken = null;
-    this.currentWsToken = null;
+    this.currentChannelId = null;
+    this.currentWebsocketChannel = null;
   }
 
   /**
-   * Try to reconnect using stored token
+   * Try to reconnect using stored channel ID
    */
   reconnect(): boolean {
     if (!this.options.persist) {
@@ -351,8 +331,12 @@ export class ModelRiverClient {
       return false;
     }
 
-    this.logger.log('Reconnecting with stored token...');
-    this.connect({ wsToken: activeRequest.wsToken });
+    this.logger.log('Reconnecting with stored channel ID...');
+    this.connect({
+      channelId: activeRequest.channelId,
+      websocketUrl: activeRequest.websocketUrl,
+      websocketChannel: activeRequest.websocketChannel,
+    });
     return true;
   }
 

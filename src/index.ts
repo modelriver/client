@@ -15,7 +15,7 @@
  *   console.log('AI Response:', data);
  * });
  * 
- * client.connect({ wsToken: 'your-token-from-backend' });
+ * client.connect({ channelId: 'channel-id-from-api' });
  * ```
  */
 

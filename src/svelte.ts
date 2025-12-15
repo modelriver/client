@@ -16,8 +16,8 @@
  *   const { response, error, isConnected, connect, disconnect } = modelRiver;
  * 
  *   async function send() {
- *     const { ws_token } = await backendAPI.createRequest(message);
- *     connect({ wsToken: ws_token });
+ *     const { channel_id, websocket_url } = await backendAPI.createRequest(message);
+ *     connect({ channelId: channel_id, websocketUrl: websocket_url });
  *   }
  * 
  *   onDestroy(() => disconnect());

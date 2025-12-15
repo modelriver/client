@@ -13,8 +13,8 @@
  * });
  * 
  * async function handleSend() {
- *   const { ws_token } = await yourBackendAPI.createRequest(message);
- *   connect({ wsToken: ws_token });
+ *   const { channel_id, websocket_url } = await yourBackendAPI.createRequest(message);
+ *   connect({ channelId: channel_id, websocketUrl: websocket_url });
  * }
  * </script>
  * 
