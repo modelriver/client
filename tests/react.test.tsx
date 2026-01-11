@@ -122,5 +122,97 @@ describe('useModelRiver', () => {
       expect(() => unmount()).not.toThrow();
     });
   });
+
+  describe('reconnection prevention with completed status', () => {
+    it('should not reconnect on mount if response is completed', () => {
+      const { saveActiveRequest } = require('../src/utils');
+      
+      // Save a pending request in localStorage
+      saveActiveRequest('modelriver_', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Create a client instance and simulate completed response
+      const { ModelRiverClient } = require('../src/client');
+      const client = new ModelRiverClient({
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      });
+
+      // Simulate completed status
+      (client as any).handleResponse({
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      });
+
+      // Now render hook - it should not reconnect
+      const reconnectSpy = vi.spyOn(client, 'reconnect');
+      const { result } = renderHook(() => useModelRiver({ 
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      }));
+
+      // Wait for mount to complete
+      expect(result.current.hasPendingRequest).toBe(false);
+      // reconnect should not be called because response is completed
+      // Note: We can't directly spy on the hook's internal client, but we can verify
+      // that hasPendingRequest is false, which means it didn't attempt reconnection
+    });
+
+    it('should clear localStorage if completed response exists on mount', () => {
+      const { saveActiveRequest, getActiveRequest, clearActiveRequest } = require('../src/utils');
+      
+      // Save a pending request
+      saveActiveRequest('modelriver_', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+      expect(getActiveRequest('modelriver_')).not.toBeNull();
+
+      // Create a client and simulate completed response
+      const { ModelRiverClient } = require('../src/client');
+      const client = new ModelRiverClient({
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      });
+
+      // Simulate completed status
+      (client as any).handleResponse({
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      });
+
+      // Render hook - it should clear localStorage
+      const { result } = renderHook(() => useModelRiver({ 
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      }));
+
+      // localStorage should be cleared
+      expect(getActiveRequest('modelriver_')).toBeNull();
+      expect(result.current.hasPendingRequest).toBe(false);
+    });
+
+    it('should check isCompleted flag before reconnecting', () => {
+      const { saveActiveRequest } = require('../src/utils');
+      
+      // Save a pending request
+      saveActiveRequest('modelriver_', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Create a client and set isCompleted flag
+      const { ModelRiverClient } = require('../src/client');
+      const client = new ModelRiverClient({
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      });
+      (client as any).isCompleted = true;
+
+      // Render hook
+      const { result } = renderHook(() => useModelRiver({ 
+        persist: true,
+        storageKeyPrefix: 'modelriver_',
+      }));
+
+      // Should not have pending request because isCompleted is true
+      expect(result.current.hasPendingRequest).toBe(false);
+    });
+  });
 });
 

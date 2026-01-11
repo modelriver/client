@@ -135,19 +135,20 @@ export function useModelRiver(
     // The client clears localStorage on completed status, so hasPendingRequest will be false
     if (client && client.hasPendingRequest()) {
       // Double-check that the stored request isn't for a completed workflow
-      // by checking if there's already a completed response
+      // by checking if there's already a completed response or isCompleted flag
       const currentState = client.getState();
-      if (currentState.response?.status !== 'completed') {
-        hasPendingRequest.value = true;
-        // Attempt reconnection
-        if (client) {
-          client.reconnect();
-        }
-      } else {
+      if (currentState.isCompleted || currentState.response?.status === 'completed') {
         // Response is already completed, clear the pending request
         hasPendingRequest.value = false;
         if (options.persist) {
           clearActiveRequest(options.storageKeyPrefix || 'modelriver');
+        }
+      } else {
+        // Not completed, safe to attempt reconnection
+        hasPendingRequest.value = true;
+        // Attempt reconnection
+        if (client) {
+          client.reconnect();
         }
       }
     }

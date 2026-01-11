@@ -268,6 +268,8 @@ export interface ModelRiverState {
   error: string | null;
   /** Whether there's a pending request that can be reconnected */
   hasPendingRequest: boolean;
+  /** Whether the workflow is completed (prevents reconnection) */
+  isCompleted?: boolean;
 }
 
 /**

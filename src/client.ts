@@ -58,6 +58,7 @@ export class ModelRiverClient {
   private error: string | null = null;
   private currentWebsocketChannel: string | null = null;
   private isConnecting = false;
+  private isCompleted = false; // Flag to track if workflow is completed, preventing reconnection
   private logger: ReturnType<typeof createLogger>;
 
   // Event listeners
@@ -91,6 +92,7 @@ export class ModelRiverClient {
       response: this.response,
       error: this.error,
       hasPendingRequest: this.hasPendingRequest(),
+      isCompleted: this.isCompleted,
     };
   }
 
@@ -139,6 +141,7 @@ export class ModelRiverClient {
     this.steps = createInitialSteps();
     this.error = null;
     this.response = null;
+    this.isCompleted = false; // Reset completed flag for new connection
 
     // Save to localStorage for persistence
     if (this.options.persist) {
@@ -304,6 +307,9 @@ export class ModelRiverClient {
       this.updateStepAndEmit('complete', { status: 'success' });
       this.response = payload;
       
+      // Mark workflow as completed to prevent reconnection attempts
+      this.isCompleted = true;
+
       // Clear active request from localStorage BEFORE emitting response
       // This prevents auto-reconnection attempts after completion
       if (this.options.persist) {
@@ -328,6 +334,10 @@ export class ModelRiverClient {
       payload.status === 'ok';
 
     if (isSuccess) {
+      // Mark workflow as completed to prevent reconnection attempts
+      // "success" status indicates workflow completion (standard workflows)
+      this.isCompleted = true;
+
       // If we were waiting for callback, mark backend as success
       const hasBackendStep = this.steps.some(s => s.id === 'backend');
       if (hasBackendStep) {
@@ -354,10 +364,9 @@ export class ModelRiverClient {
     // Emit response event
     this.emit('response', payload);
 
-    // Close connection after receiving response
-    setTimeout(() => {
-      this.cleanupConnection();
-    }, 1000);
+    // Close connection immediately for success status (same as completed)
+    // This prevents any reconnection attempts
+    this.cleanupConnection();
   }
 
   /**
@@ -406,6 +415,21 @@ export class ModelRiverClient {
   reconnect(): boolean {
     if (!this.options.persist) {
       this.logger.warn('Persistence is disabled, cannot reconnect');
+      return false;
+    }
+
+    // Prevent reconnection if workflow is already completed
+    if (this.isCompleted) {
+      this.logger.log('Workflow is already completed, preventing reconnection');
+      clearActiveRequest(this.options.storageKeyPrefix);
+      return false;
+    }
+
+    // Check if current response is completed
+    if (this.response?.status === 'completed') {
+      this.logger.log('Response status is completed, preventing reconnection');
+      this.isCompleted = true;
+      clearActiveRequest(this.options.storageKeyPrefix);
       return false;
     }
 

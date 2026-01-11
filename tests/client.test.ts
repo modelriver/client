@@ -341,5 +341,189 @@ describe('ModelRiverClient', () => {
       expect(cleanupSpy).toHaveBeenCalled();
     });
   });
+
+  describe('reconnect method', () => {
+    it('should not reconnect if response status is completed', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Attempt reconnect - should return false and not connect
+      const connectSpy = vi.spyOn(persistentClient, 'connect');
+      const result = persistentClient.reconnect();
+
+      expect(result).toBe(false);
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(persistentClient.getState().isCompleted).toBe(true);
+    });
+
+    it('should clear localStorage if response is completed when reconnect is called', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+      expect(getActiveRequest('test_modelriver')).not.toBeNull();
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Attempt reconnect
+      persistentClient.reconnect();
+
+      // localStorage should be cleared
+      expect(getActiveRequest('test_modelriver')).toBeNull();
+    });
+
+    it('should not reconnect if isCompleted flag is true', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Manually set isCompleted flag
+      (persistentClient as any).isCompleted = true;
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Attempt reconnect - should return false
+      const connectSpy = vi.spyOn(persistentClient, 'connect');
+      const result = persistentClient.reconnect();
+
+      expect(result).toBe(false);
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(getActiveRequest('test_modelriver')).toBeNull(); // Should be cleared
+    });
+
+    it('should reconnect if response is not completed and hasPendingRequest is true', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Ensure isCompleted is false
+      (persistentClient as any).isCompleted = false;
+      (persistentClient as any).response = null;
+
+      // Attempt reconnect - should return true and call connect
+      const connectSpy = vi.spyOn(persistentClient, 'connect');
+      const result = persistentClient.reconnect();
+
+      expect(result).toBe(true);
+      expect(connectSpy).toHaveBeenCalled();
+    });
+
+    it('should reset isCompleted flag when starting a new connection', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+      (persistentClient as any).handleResponse(completedPayload);
+
+      expect(persistentClient.getState().isCompleted).toBe(true);
+
+      // Start a new connection
+      persistentClient.connect({
+        channelId: 'new-channel-id',
+        wsToken: validToken,
+      });
+
+      // isCompleted should be reset
+      expect(persistentClient.getState().isCompleted).toBe(false);
+    });
+
+    it('should handle race condition: completed status received but localStorage not cleared yet', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Simulate completed status (this clears localStorage)
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Even if localStorage somehow still has the request, reconnect should fail
+      // because isCompleted flag is set
+      const connectSpy = vi.spyOn(persistentClient, 'connect');
+      const result = persistentClient.reconnect();
+
+      expect(result).toBe(false);
+      expect(connectSpy).not.toHaveBeenCalled();
+      expect(persistentClient.getState().isCompleted).toBe(true);
+    });
+
+    it('should prevent multiple reconnection attempts after completed status', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', validToken, 'wss://test.com/socket', 'test-channel');
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Attempt multiple reconnects
+      const connectSpy = vi.spyOn(persistentClient, 'connect');
+      const result1 = persistentClient.reconnect();
+      const result2 = persistentClient.reconnect();
+      const result3 = persistentClient.reconnect();
+
+      expect(result1).toBe(false);
+      expect(result2).toBe(false);
+      expect(result3).toBe(false);
+      expect(connectSpy).not.toHaveBeenCalled();
+    });
+  });
 });
 
