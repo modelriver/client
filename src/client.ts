@@ -304,7 +304,8 @@ export class ModelRiverClient {
       this.updateStepAndEmit('complete', { status: 'success' });
       this.response = payload;
       
-      // Clear active request from localStorage
+      // Clear active request from localStorage BEFORE emitting response
+      // This prevents auto-reconnection attempts after completion
       if (this.options.persist) {
         clearActiveRequest(this.options.storageKeyPrefix);
       }

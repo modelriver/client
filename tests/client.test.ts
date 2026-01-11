@@ -2,8 +2,9 @@
  * ModelRiverClient Unit Tests
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ModelRiverClient } from '../src/client';
+import { clearActiveRequest, saveActiveRequest, getActiveRequest } from '../src/utils';
 
 describe('ModelRiverClient', () => {
   let client: ModelRiverClient;
@@ -30,10 +31,21 @@ describe('ModelRiverClient', () => {
   });
 
   beforeEach(() => {
+    // Clear localStorage before each test
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
     client = new ModelRiverClient({
       debug: false,
       persist: false,
     });
+  });
+
+  afterEach(() => {
+    // Clear localStorage after each test
+    if (typeof localStorage !== 'undefined') {
+      localStorage.clear();
+    }
   });
 
   describe('constructor', () => {
@@ -199,6 +211,134 @@ describe('ModelRiverClient', () => {
 
       const state = client.getState();
       expect(state.connectionState).toBe('disconnected');
+    });
+  });
+
+  describe('completed status handling', () => {
+    it('should clear localStorage when receiving completed status with persist enabled', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Simulate a pending request in localStorage
+      saveActiveRequest('test_modelriver', 'test-channel-id', 'test-token', 'test-url', 'test-channel');
+      expect(persistentClient.hasPendingRequest()).toBe(true);
+
+      // Simulate receiving a completed status response by calling handleResponse directly
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+
+      // Call handleResponse which is the internal method that processes responses
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Check that localStorage was cleared
+      expect(persistentClient.hasPendingRequest()).toBe(false);
+      expect(getActiveRequest('test_modelriver')).toBeNull();
+    });
+
+    it('should set hasPendingRequest to false when receiving completed status', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Simulate a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', 'test-token', 'test-url', 'test-channel');
+      expect(persistentClient.hasPendingRequest()).toBe(true);
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+
+      (persistentClient as any).handleResponse(completedPayload);
+
+      const state = persistentClient.getState();
+      expect(state.hasPendingRequest).toBe(false);
+    });
+
+    it('should not attempt reconnection after completed status', () => {
+      const persistentClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Simulate a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', 'test-token', 'test-url', 'test-channel');
+
+      const reconnectSpy = vi.spyOn(persistentClient, 'reconnect');
+
+      // Simulate completed status
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+
+      (persistentClient as any).handleResponse(completedPayload);
+
+      // Verify reconnect was not called
+      expect(reconnectSpy).not.toHaveBeenCalled();
+
+      // Verify hasPendingRequest is false, so reconnect won't be called on mount
+      expect(persistentClient.hasPendingRequest()).toBe(false);
+    });
+
+    it('should handle completed status without persist enabled', () => {
+      const nonPersistentClient = new ModelRiverClient({
+        debug: false,
+        persist: false,
+      });
+
+      const responseHandler = vi.fn();
+      nonPersistentClient.on('response', responseHandler);
+
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+
+      (nonPersistentClient as any).handleResponse(completedPayload);
+
+      expect(responseHandler).toHaveBeenCalledWith(completedPayload);
+      const state = nonPersistentClient.getState();
+      expect(state.hasPendingRequest).toBe(false);
+    });
+
+    it('should clear connection immediately on completed status', () => {
+      const testClient = new ModelRiverClient({
+        debug: false,
+        persist: true,
+        storageKeyPrefix: 'test_modelriver',
+      });
+
+      // Save a pending request
+      saveActiveRequest('test_modelriver', 'test-channel-id', 'test-token', 'test-url', 'test-channel');
+
+      const cleanupSpy = vi.spyOn(testClient as any, 'cleanupConnection');
+
+      const completedPayload = {
+        status: 'completed',
+        channel_id: 'test-channel-id',
+        data: { result: 'success' },
+      };
+
+      // Simulate the handleResponse method being called with completed status
+      // This should trigger cleanupConnection
+      (testClient as any).handleResponse(completedPayload);
+
+      // Verify cleanupConnection was called
+      expect(cleanupSpy).toHaveBeenCalled();
     });
   });
 });

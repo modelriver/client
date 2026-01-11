@@ -31,6 +31,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ModelRiverClient } from './client';
+import { clearActiveRequest } from './utils';
 import type {
   ModelRiverClientOptions,
   ConnectOptions,
@@ -85,7 +86,17 @@ export function useModelRiver(
 
     const unsubResponse = client.on('response', (data) => {
       setResponse(data);
-      setHasPendingRequest(false);
+      // If response status is 'completed', clear pending request immediately
+      // to prevent reconnection attempts
+      if (data.status === 'completed') {
+        setHasPendingRequest(false);
+        // Clear from localStorage if persist is enabled
+        if (optionsRef.current.persist) {
+          clearActiveRequest(optionsRef.current.storageKeyPrefix || 'modelriver');
+        }
+      } else {
+        setHasPendingRequest(false);
+      }
     });
 
     const unsubError = client.on('error', (err) => {

@@ -36,6 +36,7 @@
 
 import { BehaviorSubject, Observable } from 'rxjs';
 import { ModelRiverClient } from './client';
+import { clearActiveRequest } from './utils';
 import type {
   ModelRiverClientOptions,
   ConnectOptions,
@@ -109,7 +110,17 @@ export class ModelRiverService {
     this.unsubscribers.push(
       this.client.on('response', (data) => {
         this.responseSubject.next(data);
-        this.hasPendingRequestSubject.next(false);
+        // If response status is 'completed', clear pending request immediately
+        // to prevent reconnection attempts
+        if (data.status === 'completed') {
+          this.hasPendingRequestSubject.next(false);
+          // Clear from localStorage if persist is enabled
+          if (options.persist) {
+            clearActiveRequest(options.storageKeyPrefix || 'modelriver');
+          }
+        } else {
+          this.hasPendingRequestSubject.next(false);
+        }
       })
     );
 

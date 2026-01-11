@@ -39,6 +39,7 @@
 
 import { writable, derived, type Readable } from 'svelte/store';
 import { ModelRiverClient } from './client';
+import { clearActiveRequest } from './utils';
 import type {
   ModelRiverClientOptions,
   ConnectOptions,
@@ -100,7 +101,17 @@ export function createModelRiver(
   unsubscribers.push(
     client.on('response', (data) => {
       responseStore.set(data);
-      hasPendingRequestStore.set(false);
+      // If response status is 'completed', clear pending request immediately
+      // to prevent reconnection attempts
+      if (data.status === 'completed') {
+        hasPendingRequestStore.set(false);
+        // Clear from localStorage if persist is enabled
+        if (options.persist) {
+          clearActiveRequest(options.storageKeyPrefix || 'modelriver');
+        }
+      } else {
+        hasPendingRequestStore.set(false);
+      }
     })
   );
 
