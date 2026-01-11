@@ -27,7 +27,7 @@ pnpm add @modelriver/client
 ### CDN
 
 ```html
-<script src="https://cdn.modelriver.com/client/v1.2.5/modelriver.min.js"></script>
+<script src="https://cdn.modelriver.com/client/v1.3.0/modelriver.min.js"></script>
 <!-- or latest -->
 <script src="https://cdn.modelriver.com/client/latest/modelriver.min.js"></script>
 ```
