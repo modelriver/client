@@ -251,6 +251,66 @@ export class ModelRiverClient {
    * Handle AI response
    */
   private handleResponse(payload: AIResponse): void {
+    // Handle event-driven workflow: ai_generated status (intermediate state)
+    if (payload.status === 'ai_generated') {
+      this.logger.log('AI generated, waiting for backend callback');
+      
+      // AI processing is complete
+      this.updateStepAndEmit('process', { 
+        status: 'success', 
+        duration: (payload as any).ai_response?.meta?.duration_ms || payload.meta?.duration_ms 
+      });
+      
+      // Add backend processing step if it doesn't exist
+      const hasBackendStep = this.steps.some(s => s.id === 'backend');
+      if (!hasBackendStep) {
+        this.steps.push({
+          id: 'backend',
+          name: 'Backend processing...',
+          status: 'pending'
+        });
+      }
+      this.updateStepAndEmit('backend', { 
+        status: 'pending', 
+        name: 'Waiting for backend callback...' 
+      });
+      
+      // Store intermediate response but don't mark as complete
+      this.response = payload;
+      
+      // Emit response event so consumers can see the ai_generated status
+      this.emit('response', payload);
+      
+      // Don't close connection - keep waiting for final success/completed status
+      return;
+    }
+
+    // Handle completed status (after callback in event-driven workflows)
+    if (payload.status === 'completed') {
+      this.logger.log('Workflow completed via callback');
+      
+      this.updateStepAndEmit('process', { status: 'success' });
+      this.updateStepAndEmit('backend', { status: 'success', name: 'Backend processed' });
+      this.updateStepAndEmit('receive', { status: 'success', duration: 50 });
+      this.updateStepAndEmit('complete', { status: 'success' });
+      this.response = payload;
+      
+      // Clear active request from localStorage
+      if (this.options.persist) {
+        clearActiveRequest(this.options.storageKeyPrefix);
+      }
+
+      // Emit response event
+      this.emit('response', payload);
+
+      // Close connection after receiving response
+      setTimeout(() => {
+        this.cleanupConnection();
+      }, 1000);
+      return;
+    }
+
+    // Handle standard success status
     const isSuccess = 
       payload.status === 'success' || 
       payload.status === 'SUCCESS' || 
@@ -258,6 +318,12 @@ export class ModelRiverClient {
       payload.status === 'ok';
 
     if (isSuccess) {
+      // If we were waiting for callback, mark backend as success
+      const hasBackendStep = this.steps.some(s => s.id === 'backend');
+      if (hasBackendStep) {
+        this.updateStepAndEmit('backend', { status: 'success', name: 'No backend processing needed' });
+      }
+      
       this.updateStepAndEmit('process', { status: 'success', duration: payload.meta?.duration_ms });
       this.updateStepAndEmit('receive', { status: 'success', duration: 50 });
       this.updateStepAndEmit('complete', { status: 'success' });

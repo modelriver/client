@@ -171,7 +171,7 @@ export interface ResponseError {
  * AI response payload from WebSocket
  */
 export interface AIResponse {
-  /** Response status ("success" or "error") */
+  /** Response status ("success", "error", "ai_generated", or "completed") */
   status: string;
   /** Channel ID */
   channel_id?: string;
@@ -185,6 +185,21 @@ export interface AIResponse {
   meta?: ResponseMeta;
   /** Error information (if failed) */
   error?: ResponseError;
+  /** AI response (for event-driven workflows with ai_generated status) */
+  ai_response?: {
+    data?: unknown;
+    meta?: ResponseMeta;
+  };
+  /** Event name (for event-driven workflows) */
+  event_name?: string;
+  /** Message (for intermediate statuses) */
+  message?: string;
+  /** Task ID (for event-driven workflows with callback) */
+  task_id?: string;
+  /** Callback metadata (for event-driven workflows with callback) */
+  callback_metadata?: Record<string, unknown>;
+  /** Customer data (cached from original request) */
+  customer_data?: Record<string, unknown>;
 }
 
 /**
