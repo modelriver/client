@@ -312,17 +312,10 @@ export class ModelRiverClient {
       // Emit response event
       this.emit('response', payload);
 
-      // Close connection after receiving response
-      // Delay of 1000ms ensures callback has time to be processed by ModelRiver
-      // This prevents race conditions where websocket closes before callback is received
-      const closeDelay = 1000;
-      this.logger.log(`Scheduling websocket close in ${closeDelay}ms to ensure callback is processed`);
-      
-      setTimeout(() => {
-        const closeTimestamp = new Date().toISOString();
-        this.logger.log(`Closing websocket connection at ${closeTimestamp} (${closeDelay}ms after completed status)`);
-        this.cleanupConnection();
-      }, closeDelay);
+      // Close connection immediately when status is completed
+      const closeTimestamp = new Date().toISOString();
+      this.logger.log(`Closing websocket connection immediately at ${closeTimestamp} (status: completed)`);
+      this.cleanupConnection();
       return;
     }
 
