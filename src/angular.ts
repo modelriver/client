@@ -110,9 +110,12 @@ export class ModelRiverService {
     this.unsubscribers.push(
       this.client.on('response', (data) => {
         this.responseSubject.next(data);
-        // If response status is 'completed', clear pending request immediately
-        // to prevent reconnection attempts
-        if (data.status === 'completed') {
+        // Check for both 'completed' and 'success' statuses (both indicate workflow completion)
+        // Also check meta.status for completion indicators
+        const status = data.status || data.meta?.status;
+        const isCompleted = status === 'completed' || status === 'success' || status === 'SUCCESS';
+        
+        if (isCompleted) {
           this.hasPendingRequestSubject.next(false);
           // Clear from localStorage if persist is enabled
           if (options.persist) {
@@ -145,13 +148,18 @@ export class ModelRiverService {
     );
 
     // Check for pending request on init
-    // Only reconnect if there's actually a pending request AND it's not completed
-    // The client clears localStorage on completed status, so hasPendingRequest will be false
-    if (this.client && this.client.hasPendingRequest()) {
-      // Double-check that the stored request isn't for a completed workflow
-      // by checking if there's already a completed response or isCompleted flag
-      const currentState = this.client.getState();
-      if (currentState.isCompleted || currentState.response?.status === 'completed') {
+    // First check if workflow is already completed - if so, skip all reconnection logic
+    const currentState = this.client.getState();
+    if (currentState.isCompleted) {
+      // Workflow is already completed, clear any pending request
+      this.hasPendingRequestSubject.next(false);
+      if (options.persist) {
+        clearActiveRequest(options.storageKeyPrefix || 'modelriver');
+      }
+    } else if (this.client && this.client.hasPendingRequest()) {
+      // Check if response status indicates completion (both 'completed' and 'success')
+      const responseStatus = currentState.response?.status || currentState.response?.meta?.status;
+      if (responseStatus === 'completed' || responseStatus === 'success' || responseStatus === 'SUCCESS') {
         // Response is already completed, clear the pending request
         this.hasPendingRequestSubject.next(false);
         if (options.persist) {

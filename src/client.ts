@@ -109,6 +109,12 @@ export class ModelRiverClient {
    * Connect to WebSocket with channel ID
    */
   connect(options: ConnectOptions): void {
+    // Prevent connection if workflow is already completed
+    if (this.isCompleted) {
+      this.logger.warn('Workflow is already completed, preventing new connection');
+      return;
+    }
+
     if (this.isConnecting) {
       this.logger.warn('Connection already in progress, skipping...');
       return;
@@ -179,6 +185,13 @@ export class ModelRiverClient {
 
     this.socket.onError((error: unknown) => {
       this.logger.error('Socket error:', error);
+      
+      // Don't trigger error state or reconnection if workflow is already completed
+      if (this.isCompleted) {
+        this.logger.log('Workflow is already completed, ignoring socket error');
+        return;
+      }
+      
       this.connectionState = 'error';
       this.isConnecting = false;
       const errorMsg = 'WebSocket connection error';
@@ -425,9 +438,10 @@ export class ModelRiverClient {
       return false;
     }
 
-    // Check if current response is completed
-    if (this.response?.status === 'completed') {
-      this.logger.log('Response status is completed, preventing reconnection');
+    // Check if current response is completed or success (both indicate workflow completion)
+    const responseStatus = this.response?.status || this.response?.meta?.status;
+    if (responseStatus === 'completed' || responseStatus === 'success' || responseStatus === 'SUCCESS') {
+      this.logger.log(`Response status is ${responseStatus}, preventing reconnection`);
       this.isCompleted = true;
       clearActiveRequest(this.options.storageKeyPrefix);
       return false;
