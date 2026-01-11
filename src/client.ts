@@ -253,12 +253,18 @@ export class ModelRiverClient {
   private handleResponse(payload: AIResponse): void {
     // Handle event-driven workflow: ai_generated status (intermediate state)
     if (payload.status === 'ai_generated') {
-      this.logger.log('AI generated, waiting for backend callback');
+      const aiGeneratedTimestamp = new Date().toISOString();
+      this.logger.log(`AI generated at ${aiGeneratedTimestamp}, waiting for backend callback`);
+      this.logger.log(`Channel ID: ${payload.channel_id || 'N/A'}`);
+      this.logger.log(`Event name: ${payload.event_name || 'N/A'}`);
+      this.logger.log(`Duration: ${payload.meta?.duration_ms || 'N/A'}ms`);
+      this.logger.log('WebSocket connection will remain open until callback is received');
       
       // AI processing is complete
+      // Use payload.meta?.duration_ms since ai_response is no longer included in ai_generated status
       this.updateStepAndEmit('process', { 
         status: 'success', 
-        duration: (payload as any).ai_response?.meta?.duration_ms || payload.meta?.duration_ms 
+        duration: payload.meta?.duration_ms 
       });
       
       // Add backend processing step if it doesn't exist
@@ -287,7 +293,10 @@ export class ModelRiverClient {
 
     // Handle completed status (after callback in event-driven workflows)
     if (payload.status === 'completed') {
-      this.logger.log('Workflow completed via callback');
+      const completedTimestamp = new Date().toISOString();
+      this.logger.log(`Workflow completed via callback at ${completedTimestamp}`);
+      this.logger.log(`Channel ID: ${payload.channel_id || 'N/A'}`);
+      this.logger.log(`Task ID: ${payload.task_id || 'N/A'}`);
       
       this.updateStepAndEmit('process', { status: 'success' });
       this.updateStepAndEmit('backend', { status: 'success', name: 'Backend processed' });
@@ -304,9 +313,16 @@ export class ModelRiverClient {
       this.emit('response', payload);
 
       // Close connection after receiving response
+      // Delay of 1000ms ensures callback has time to be processed by ModelRiver
+      // This prevents race conditions where websocket closes before callback is received
+      const closeDelay = 1000;
+      this.logger.log(`Scheduling websocket close in ${closeDelay}ms to ensure callback is processed`);
+      
       setTimeout(() => {
+        const closeTimestamp = new Date().toISOString();
+        this.logger.log(`Closing websocket connection at ${closeTimestamp} (${closeDelay}ms after completed status)`);
         this.cleanupConnection();
-      }, 1000);
+      }, closeDelay);
       return;
     }
 
