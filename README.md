@@ -27,7 +27,7 @@ pnpm add @modelriver/client
 ### CDN
 
 ```html
-<script src="https://cdn.modelriver.com/client/v1.1.3/modelriver.min.js"></script>
+<script src="https://cdn.modelriver.com/client/v1.1.37/modelriver.min.js"></script>
 <!-- or latest -->
 <script src="https://cdn.modelriver.com/client/latest/modelriver.min.js"></script>
 ```
@@ -408,7 +408,7 @@ interface AsyncResponse {
 
 // AI response received via WebSocket
 interface AIResponse {
-  status: string;               // "success" or "error"
+  status: string;               // "success", "error", "ai_generated", or "completed"
   channel_id?: string;
   content?: string;             // AI response text
   model?: string;               // Model used (e.g., "gpt-4")
@@ -427,6 +427,24 @@ interface AIResponse {
     message: string;
     details?: unknown;
   };
+  // Event-driven workflow fields
+  ai_response?: {
+    data?: unknown;
+    meta?: {
+      workflow?: string;
+      status?: string;
+      duration_ms?: number;
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+      };
+    };
+  };
+  event_name?: string;
+  task_id?: string;
+  callback_metadata?: Record<string, unknown>;
+  customer_data?: Record<string, unknown>;
 }
 
 interface WorkflowStep {
