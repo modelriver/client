@@ -109,17 +109,6 @@ export class ModelRiverClient {
    * Connect to WebSocket with channel ID
    */
   connect(options: ConnectOptions): void {
-    // Prevent connection if workflow is already completed
-    if (this.isCompleted) {
-      this.logger.warn('Workflow is already completed, preventing new connection');
-      return;
-    }
-
-    if (this.isConnecting) {
-      this.logger.warn('Connection already in progress, skipping...');
-      return;
-    }
-
     const { channelId, wsToken, websocketUrl, websocketChannel } = options;
 
     if (!channelId) {
@@ -133,6 +122,11 @@ export class ModelRiverClient {
       const errorMsg = 'wsToken is required for WebSocket authentication';
       this.setError(errorMsg);
       this.emit('error', errorMsg);
+      return;
+    }
+
+    if (this.isConnecting) {
+      this.logger.warn('Connection already in progress, skipping...');
       return;
     }
 
@@ -185,13 +179,13 @@ export class ModelRiverClient {
 
     this.socket.onError((error: unknown) => {
       this.logger.error('Socket error:', error);
-      
+
       // Don't trigger error state or reconnection if workflow is already completed
       if (this.isCompleted) {
         this.logger.log('Workflow is already completed, ignoring socket error');
         return;
       }
-      
+
       this.connectionState = 'error';
       this.isConnecting = false;
       const errorMsg = 'WebSocket connection error';
@@ -232,7 +226,7 @@ export class ModelRiverClient {
       .receive('error', (error: { reason?: string }) => {
         const reason = error?.reason || 'unknown';
         this.logger.error('Channel join failed:', reason);
-        
+
         let errorMsg = 'Failed to join channel';
         if (reason === 'unauthorized_project_access') {
           errorMsg = 'Unauthorized: You do not have access to this project';
@@ -275,14 +269,14 @@ export class ModelRiverClient {
       this.logger.log(`Event name: ${payload.event_name || 'N/A'}`);
       this.logger.log(`Duration: ${payload.meta?.duration_ms || 'N/A'}ms`);
       this.logger.log('WebSocket connection will remain open until callback is received');
-      
+
       // AI processing is complete
       // Use payload.meta?.duration_ms since ai_response is no longer included in ai_generated status
-      this.updateStepAndEmit('process', { 
-        status: 'success', 
-        duration: payload.meta?.duration_ms 
+      this.updateStepAndEmit('process', {
+        status: 'success',
+        duration: payload.meta?.duration_ms
       });
-      
+
       // Add backend processing step if it doesn't exist
       const hasBackendStep = this.steps.some(s => s.id === 'backend');
       if (!hasBackendStep) {
@@ -292,17 +286,17 @@ export class ModelRiverClient {
           status: 'pending'
         });
       }
-      this.updateStepAndEmit('backend', { 
-        status: 'pending', 
-        name: 'Waiting for backend callback...' 
+      this.updateStepAndEmit('backend', {
+        status: 'pending',
+        name: 'Waiting for backend callback...'
       });
-      
+
       // Store intermediate response but don't mark as complete
       this.response = payload;
-      
+
       // Emit response event so consumers can see the ai_generated status
       this.emit('response', payload);
-      
+
       // Don't close connection - keep waiting for final success/completed status
       return;
     }
@@ -313,13 +307,13 @@ export class ModelRiverClient {
       this.logger.log(`Workflow completed via callback at ${completedTimestamp}`);
       this.logger.log(`Channel ID: ${payload.channel_id || 'N/A'}`);
       this.logger.log(`Task ID: ${payload.task_id || 'N/A'}`);
-      
+
       this.updateStepAndEmit('process', { status: 'success' });
       this.updateStepAndEmit('backend', { status: 'success', name: 'Backend processed' });
       this.updateStepAndEmit('receive', { status: 'success', duration: 50 });
       this.updateStepAndEmit('complete', { status: 'success' });
       this.response = payload;
-      
+
       // Mark workflow as completed to prevent reconnection attempts
       this.isCompleted = true;
 
@@ -340,9 +334,9 @@ export class ModelRiverClient {
     }
 
     // Handle standard success status
-    const isSuccess = 
-      payload.status === 'success' || 
-      payload.status === 'SUCCESS' || 
+    const isSuccess =
+      payload.status === 'success' ||
+      payload.status === 'SUCCESS' ||
       payload.meta?.status === 'success' ||
       payload.status === 'ok';
 
@@ -356,7 +350,7 @@ export class ModelRiverClient {
       if (hasBackendStep) {
         this.updateStepAndEmit('backend', { status: 'success', name: 'No backend processing needed' });
       }
-      
+
       this.updateStepAndEmit('process', { status: 'success', duration: payload.meta?.duration_ms });
       this.updateStepAndEmit('receive', { status: 'success', duration: 50 });
       this.updateStepAndEmit('complete', { status: 'success' });
@@ -653,9 +647,15 @@ export class ModelRiverClient {
   private cleanupConnection(): void {
     this.stopHeartbeat();
 
+    // If workflow is completed, socket is already closed, skip socket operations
+    // This prevents errors when trying to disconnect an already-closed connection
+    const skipSocketOps = this.isCompleted;
+
     if (this.channel) {
       try {
-        this.channel.leave();
+        if (!skipSocketOps) {
+          this.channel.leave();
+        }
       } catch {
         // Ignore errors during cleanup
       }
@@ -664,7 +664,9 @@ export class ModelRiverClient {
 
     if (this.socket) {
       try {
-        this.socket.disconnect();
+        if (!skipSocketOps) {
+          this.socket.disconnect();
+        }
       } catch {
         // Ignore errors during cleanup
       }

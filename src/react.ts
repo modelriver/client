@@ -90,7 +90,7 @@ export function useModelRiver(
       // Also check meta.status for completion indicators
       const status = data.status || data.meta?.status;
       const isCompleted = status === 'completed' || status === 'success' || status === 'SUCCESS';
-      
+
       if (isCompleted) {
         setHasPendingRequest(false);
         // Clear from localStorage if persist is enabled
@@ -153,9 +153,11 @@ export function useModelRiver(
       unsubResponse();
       unsubError();
       unsubStep();
-      
-      // Only destroy if there's no pending request
-      if (!client.hasPendingRequest()) {
+
+      // Only destroy if there's no pending request and workflow is not already completed
+      // If workflow is completed, the connection is already closed and cleaned up
+      const state = client.getState();
+      if (!client.hasPendingRequest() && !state.isCompleted) {
         client.destroy();
       }
     };

@@ -90,7 +90,7 @@ describe('ModelRiverClient', () => {
       const errorHandler = vi.fn();
       client.on('error', errorHandler);
 
-      client.connect({ wsToken: 'invalid-token' });
+      client.connect({ channelId: 'test-chan', wsToken: 'invalid-token' });
 
       expect(errorHandler).toHaveBeenCalled();
     });
@@ -105,7 +105,7 @@ describe('ModelRiverClient', () => {
         exp: Math.floor(Date.now() / 1000) - 3600, // Expired 1 hour ago
       });
 
-      client.connect({ wsToken: expiredToken });
+      client.connect({ channelId: 'test-chan', wsToken: expiredToken });
 
       expect(errorHandler).toHaveBeenCalledWith('Token has expired');
     });
@@ -114,18 +114,18 @@ describe('ModelRiverClient', () => {
       const connectingHandler = vi.fn();
       client.on('connecting', connectingHandler);
 
-      client.connect({ wsToken: validToken });
+      client.connect({ channelId: 'test-chan', wsToken: validToken });
 
       expect(connectingHandler).toHaveBeenCalled();
     });
 
     it('should initialize steps on connect', () => {
-      client.connect({ wsToken: validToken });
+      client.connect({ channelId: 'test-chan', wsToken: validToken });
 
       const state = client.getState();
       expect(state.steps).toHaveLength(4);
       expect(state.steps[0].id).toBe('queue');
-      expect(state.steps[0].status).toBe('loading');
+      expect(state.steps[0].status).toBe('pending');
     });
   });
 
@@ -150,7 +150,7 @@ describe('ModelRiverClient', () => {
   describe('reset', () => {
     it('should clear all state', () => {
       // Set up some state
-      client.connect({ wsToken: validToken });
+      client.connect({ channelId: 'test-chan', wsToken: validToken });
       client.reset();
 
       const state = client.getState();
@@ -184,7 +184,7 @@ describe('ModelRiverClient', () => {
       const stepHandler = vi.fn();
       client.on('step', stepHandler);
 
-      client.connect({ wsToken: validToken });
+      client.connect({ channelId: 'test-chan', wsToken: validToken });
 
       // Step handler should be called when steps are updated
       expect(stepHandler).toHaveBeenCalled();
